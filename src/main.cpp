@@ -10,8 +10,7 @@
 #include "ConditionerCanMessage.h"
 #include "Log.h"
 #include "Led.h"
-
-//#define DEBUG_MSG
+#include "StatusInfo.h"
 
 #define _inputSerial Serial	  // GPIO3 (RX)
 #define _outputSerial Serial1 // GPIO2 (TX)
@@ -25,66 +24,79 @@ Buttons RemapButton(Buttons btn);
 CitroenCanParser _parser(Constants::MaxMessageSize * 2, MessageCallback);
 u8 _sendBuffer[Constants::MaxMessageSize];
 Led _redLed(15);
-Led _builtInLed(13);
+Led _blueLed(13);
+Led _greenLed(12);
 IPAddress _localIp(192, 168, 43, 1);
-#ifdef DEBUG_MSG
-Log _log(_localIp, nullptr);
-#else
-Log _log;
-#endif
-WiFiUDP _udp;
+Log* _log = nullptr;
+WiFiUDP *_udp = nullptr;
+StatusInfo _status(&_blueLed, &_log);
+std::vector<Updatable*> _updatables{&_redLed, &_blueLed, &_greenLed, &_status};
 
 void setup()
 {
+	pinMode(4, INPUT);
+	bool isDebugMode = digitalRead(4) == LOW;
 	_outputSerial.begin(Constants::BaudRate);
 	_inputSerial.begin(Constants::BaudRate);
 	_redLed.Init();
-	_builtInLed.Init();
+	_blueLed.Init();
+	_greenLed.Init();
 
 	WiFi.persistent(false);
 
-#ifdef DEBUG_MSG
-	WiFi.mode(WIFI_AP);
-	WiFi.softAPConfig(_localIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
-	WiFi.softAP("KeyRemap", "4952217929");
-	_inputSerial.println();
-	_udp.begin(6666);
-#else
-	WiFi.mode(WIFI_OFF);
-	WiFi.forceSleepBegin();
-#endif
+	if(isDebugMode)
+	{
+		_greenLed.Pulse(1000);
 
-	_log.WriteDebug("----------\r\nSetup completed");
+		_log = new Log(_localIp, &_inputSerial);
+
+		WiFi.mode(WIFI_AP);
+		WiFi.softAPConfig(_localIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
+		WiFi.softAP("TeyesCitroen", "TeyesCitroen");
+		_inputSerial.println();
+		_inputSerial.println("--- DEBUG MODE ---");
+
+		_udp = new WiFiUDP();
+		_udp->begin(6666);
+	}
+	else
+	{
+		_log = new Log();
+		WiFi.setSleepMode(WIFI_MODEM_SLEEP); delay(1);
+  		WiFi.forceSleepBegin(); delay(1);
+	}
+
+	for (const auto &updatable : _updatables)
+		if(updatable)
+			updatable->Init();
+
+	_log->WriteDebug("Setup completed");
 }
 
 void loop()
 {
+	for (const auto &updatable : _updatables)
+		if(updatable)
+			updatable->Update();
+
 	int b = _inputSerial.read();
 	if (b >= 0)
 		_parser.Add(static_cast<u8>(b));
 
-	auto currentTime = millis();
-	if (currentTime > _lastInfoTime + _infoPeriod)
+	if (_udp)
 	{
-		auto heap = ESP.getFreeHeap();
-		_log.WriteDebug("heap: %d", heap);
-
-		_lastInfoTime = currentTime;
-
-		_builtInLed.Toggle();
-	}
-
-	int packetSize = _udp.parsePacket();
-	if (packetSize == 2)
-	{
-		char buff[packetSize + 1];
-		_udp.read(buff, packetSize);
-		buff[packetSize] = 0;
-		char *end;
-		Buttons b = static_cast<Buttons>(strtol(buff, &end, 16));
-		_log.WriteDebug("REMOTE %s", ButtonEx::ToString(b));
-		ButtonCanMessage msg(b);
-		MessageCallback(&msg);
+		int packetSize = _udp->parsePacket();
+		if (packetSize == 2)
+		{
+			char buff[packetSize + 1];
+			_udp->read(buff, packetSize);
+			buff[packetSize] = 0;
+			char *end;
+			Buttons b = static_cast<Buttons>(strtol(buff, &end, 16));
+			_log->WriteDebug("REMOTE %s end", ButtonEx::ToString(b));
+			ButtonCanMessage msg(b);
+			MessageCallback(&msg);
+		}
 	}
 }
 
@@ -96,38 +108,41 @@ void MessageCallback(CanMessageBase *msg)
 		Buttons b2 = RemapButton(b1);
 
 		if (b1 == b2)
-			_log.WriteDebug("Button %s", ButtonEx::ToString(b1));
+			_log->WriteDebug("Button %s", ButtonEx::ToString(b1));
 		else
 		{
 			auto remapped = ButtonCanMessage(b2);
 			msg = &remapped;
-			_log.WriteDebug("Button %s -> %s", ButtonEx::ToString(b1), ButtonEx::ToString(b2));
+			_log->WriteDebug("Button %s -> %s", ButtonEx::ToString(b1), ButtonEx::ToString(b2));
 		}
 	}
 	else if (auto tiny = dynamic_cast<TinyCanMessage *>(msg))
 	{
 		u8 v = 0;
 		tiny->CopyTo(&v);
-		_log.WriteDebug("Bypasses '%02X'", v);
+		_log->WriteDebug("Bypasses %02X", v);
 	}
 	else if (auto conditioner = dynamic_cast<CondinionerCanMessage *>(msg))
 	{
 		float t1 = conditioner->GetT1();
 		float t2 = conditioner->GetT2();
-		_log.WriteDebug("T1=%.1f, T2=%.1f", t1, t2);
+		_log->WriteDebug("Conditioner t1=%.1f, t2=%.1f", t1, t2);
 		conditioner->FixTemperatures();
-	}	
+	}
 	else if (auto unknown = dynamic_cast<UnknownCanMessage *>(msg))
 	{
 		auto messageType = MessageTypeEx::ToString(unknown->GetMessageType());
 		auto unknownSize = msg->CopyTo(_sendBuffer);
-		_log.WriteDebug(messageType, _sendBuffer, unknownSize);
+		_log->AppendDebug("%s", messageType);
+		for (size_t i = 0; i < unknownSize; i++)
+			_log->AppendDebug(" %02X", _sendBuffer[i]);
+		_log->FlushDebug();
 	}
 
 	size_t size = msg->CopyTo(_sendBuffer);
 	_outputSerial.write(_sendBuffer, size);
 
-	_redLed.Toggle();
+	_redLed.Pulse(100);
 }
 
 Buttons RemapButton(Buttons btn)

@@ -1,4 +1,6 @@
 #include "Log.h"
+#include <stdlib.h>
+#include <stdio.h>
 
 Log::Log(IPAddress local, HardwareSerial *serial)
 {
@@ -10,8 +12,9 @@ Log::Log(IPAddress local, HardwareSerial *serial)
     u32_t broadcast = local.v4() | 0xFF000000;
     _local = local;
     _remote = IPAddress(broadcast);
-
     _udp = WiFiUDP();
+
+    _count = 0;
 }
 
 Log::Log()
@@ -19,45 +22,24 @@ Log::Log()
     _disabled = true;
 }
 
-void Log::WriteDebug(const char *format, ...)
+void Log::FlushDebug()
 {
-    if (_disabled)
-        return;
-
-    auto ptr = WriteTime(_buffer);
-
-    va_list args;
-    va_start(args, format);
-    ptr += vsprintf(_buffer + ptr, format, args);
-    va_end(args);
-
-    WriteImpl(ptr);
+    WriteImpl();
+    _count = 0;
 }
 
-void Log::WriteDebug(const char *prefix, const u8_t *data, size_t dataSize)
+void Log::AppendDebug()
 {
-    if (_disabled)
-        return;
-
-    auto ptr = WriteTime(_buffer);
-    size_t prefixLength = std::strlen(prefix);
-    std::memcpy(_buffer + ptr, prefix, std::strlen(prefix));
-    ptr += prefixLength;
-    _buffer[ptr++] = ':';
-    for (size_t i = 0; i < dataSize; i++)
-    {
-        auto size = sprintf(_buffer + ptr, " %02X", data[i]);
-        ptr += size;
-    }
-
-    WriteImpl(ptr);
 }
 
-void Log::WriteImpl(size_t size)
+void Log::WriteImpl()
 {
+    if(_count == 0)
+        return;
+
     if (_udp.beginPacketMulticast(_remote, _debugPort, _local, 2))
     {
-        _udp.write(_buffer, size);
+        _udp.write(_buffer, _count);
         _udp.endPacket();
     }
     else
@@ -68,13 +50,13 @@ void Log::WriteImpl(size_t size)
 
     if (_serial != nullptr)
     {
-        _buffer[size++] = '\r';
-        _buffer[size++] = '\n';
-        _serial->write(_buffer, size);
+        _buffer[_count++] = '\r';
+        _buffer[_count++] = '\n';
+        _serial->write(_buffer, _count);
     }
 }
 
-size_t Log::WriteTime(char *buffer)
+size_t Log::WriteTime()
 {
     auto time = millis() - _startTime;
     uint32_t ss = time / 1000;
@@ -84,7 +66,9 @@ size_t Log::WriteTime(char *buffer)
     mm = mm % 60;
     ss = ss % 60;
 
-    return sprintf(_buffer, "%02d:%02d:%02d.%03d ", hh, mm, ss, ms);
+    auto size = sprintf(_buffer + _count, "%02d:%02d:%02d.%03d ", hh, mm, ss, ms);
+    _count += size;
+    return size;
 }
 
 Log::~Log()
