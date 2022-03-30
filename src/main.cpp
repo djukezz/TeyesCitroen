@@ -27,9 +27,8 @@ Led _redLed(15);
 Led _blueLed(13);
 Led _greenLed(12);
 IPAddress _localIp(192, 168, 43, 1);
-Log* _log = nullptr;
 WiFiUDP *_udp = nullptr;
-StatusInfo _status(&_blueLed, &_log);
+StatusInfo _status(&_blueLed);
 std::vector<Updatable*> _updatables{&_redLed, &_blueLed, &_greenLed, &_status};
 
 void setup()
@@ -48,7 +47,7 @@ void setup()
 	{
 		_greenLed.Pulse(1000);
 
-		_log = new Log(_localIp, &_inputSerial);
+		Log::Init(&_localIp, &_inputSerial);
 
 		WiFi.mode(WIFI_AP);
 		WiFi.softAPConfig(_localIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
@@ -61,7 +60,6 @@ void setup()
 	}
 	else
 	{
-		_log = new Log();
 		WiFi.setSleepMode(WIFI_MODEM_SLEEP); delay(1);
   		WiFi.forceSleepBegin(); delay(1);
 	}
@@ -70,7 +68,7 @@ void setup()
 		if(updatable)
 			updatable->Init();
 
-	_log->WriteDebug("Setup completed");
+	Log::GetInstance()->WriteDebug("Setup completed");
 }
 
 void loop()
@@ -93,7 +91,7 @@ void loop()
 			buff[packetSize] = 0;
 			char *end;
 			Buttons b = static_cast<Buttons>(strtol(buff, &end, 16));
-			_log->WriteDebug("REMOTE %s end", ButtonEx::ToString(b));
+			Log::GetInstance()->WriteDebug("REMOTE %s end", ButtonEx::ToString(b));
 			ButtonCanMessage msg(b);
 			MessageCallback(&msg);
 		}
@@ -108,35 +106,35 @@ void MessageCallback(CanMessageBase *msg)
 		Buttons b2 = RemapButton(b1);
 
 		if (b1 == b2)
-			_log->WriteDebug("Button %s", ButtonEx::ToString(b1));
+			Log::GetInstance()->WriteDebug("Button %s", ButtonEx::ToString(b1));
 		else
 		{
 			auto remapped = ButtonCanMessage(b2);
 			msg = &remapped;
-			_log->WriteDebug("Button %s -> %s", ButtonEx::ToString(b1), ButtonEx::ToString(b2));
+			Log::GetInstance()->WriteDebug("Button %s -> %s", ButtonEx::ToString(b1), ButtonEx::ToString(b2));
 		}
 	}
 	else if (auto tiny = dynamic_cast<TinyCanMessage *>(msg))
 	{
 		u8 v = 0;
 		tiny->CopyTo(&v);
-		_log->WriteDebug("Bypasses %02X", v);
+		Log::GetInstance()->WriteDebug("Bypasses %02X", v);
 	}
 	else if (auto conditioner = dynamic_cast<CondinionerCanMessage *>(msg))
 	{
 		float t1 = conditioner->GetT1();
 		float t2 = conditioner->GetT2();
-		_log->WriteDebug("Conditioner t1=%.1f, t2=%.1f", t1, t2);
+		Log::GetInstance()->WriteDebug("Conditioner t1=%.1f, t2=%.1f", t1, t2);
 		conditioner->FixTemperatures();
 	}
 	else if (auto unknown = dynamic_cast<UnknownCanMessage *>(msg))
 	{
 		auto messageType = MessageTypeEx::ToString(unknown->GetMessageType());
 		auto unknownSize = msg->CopyTo(_sendBuffer);
-		_log->AppendDebug("%s", messageType);
+		Log::GetInstance()->AppendDebug("%s", messageType);
 		for (size_t i = 0; i < unknownSize; i++)
-			_log->AppendDebug(" %02X", _sendBuffer[i]);
-		_log->FlushDebug();
+			Log::GetInstance()->AppendDebug(" %02X", _sendBuffer[i]);
+		Log::GetInstance()->FlushDebug();
 	}
 
 	size_t size = msg->CopyTo(_sendBuffer);
