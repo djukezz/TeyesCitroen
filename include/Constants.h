@@ -1,6 +1,7 @@
 #pragma once
 
 #include <c_types.h>
+#include "IPAddress.h"
 
 struct Constants final
 {
@@ -12,5 +13,10 @@ struct Constants final
 	static const size_t DataOffset = 3;
 
 	static const size_t MaxMessageSize = 32;
+
+	static constexpr const char* SSID = "TeyesCitroen";
+	static constexpr const char* Password = "TeyesCitroen";
+	static IPAddress LocalIp;
 };
 
+inline IPAddress Constants::LocalIp = IPAddress{192, 168, 43, 1};

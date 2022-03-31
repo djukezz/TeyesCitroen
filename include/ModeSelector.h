@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include "Log.h"
 #include "Updatable.h"
+#include "BootModes.h"
+#include "NVRamData.h"
 
 // You have to press <DebugButton> button <Repeats> times with max delay <Time>ms between presses
 class ModeSelector final : public Updatable
@@ -14,12 +16,6 @@ public:
         : _pin(pin)
     {
         pinMode(_pin, INPUT);
-    }
-
-    bool IsDebugMode()
-    {
-        return digitalRead(_pin) == LOW ||
-               ESP.getResetInfoPtr()->reason == REASON_SOFT_RESTART;
     }
 
     void ButtonPressed(Buttons b)
@@ -38,14 +34,17 @@ public:
             break;
         }
 
-        if (_repeats >= Repeats)
+        if (_repeats >= DebugRepeats)
             Reset();
-        else if (_repeats * 2 >= Repeats)
-            Log::GetInstance()->WriteDebug("%d times left");
+        else if (_repeats * 2 >= DebugRepeats)
+            Log::GetInstance()->WriteDebug("%d times left", DebugRepeats - _repeats);
     }
 
     void Update() override
     {
+        if(digitalRead(_pin) == LOW)
+            Reset();
+
         if (_pressTime == 0)
             return;
 
@@ -59,16 +58,35 @@ public:
 private:
     void Reset()
     {
+        NVRamData nvRam;
+        Log::GetInstance()->WriteDebug("Current boot mode is %s", BootModeEx::ToString(nvRam.BootMode));
+        nvRam.BootMode = GetNextMode(nvRam.BootMode);
+        nvRam.Save();
+
         Log::GetInstance()->WriteDebug("Resetting...");
-        Log::GetInstance()->WriteDebug("Boot in debug mode...");
+        Log::GetInstance()->WriteDebug("Boot in %s mode...", BootModeEx::ToString(nvRam.BootMode));
         delay(500);
         ESP.reset();
     }
 
+    static BootModes GetNextMode(BootModes current)
+    {
+        switch (current)
+        {
+        case BootModes::NORMAL:
+            return BootModes::DEBUG;
+        case BootModes::DEBUG:
+            return BootModes::FOTA;
+        default:
+            return BootModes::NORMAL;
+        }
+    }
+
     const uint8_t _pin;
     static const Buttons DebugButton = Buttons::SWC_KEY_ESC;
-    static const size_t Repeats = 10;
+    static const size_t DebugRepeats = 10;
     static const size_t Time = 1000;
+    Buttons _button;
     size_t _repeats = 0;
     size_t _pressTime = 0;
 };

@@ -13,6 +13,8 @@
 #include "StatusInfo.h"
 #include "UpdatableCollection.h"
 #include "ModeSelector.h"
+#include "FOTA.h"
+#include "NVRamData.h"
 
 #define _inputSerial Serial	  // GPIO3 (RX)
 #define _outputSerial Serial1 // GPIO2 (TX)
@@ -28,18 +30,26 @@ u8 _sendBuffer[Constants::MaxMessageSize];
 Led _redLed(15);
 Led _blueLed(13);
 Led _greenLed(12);
-IPAddress _localIp(192, 168, 43, 1);
 WiFiUDP *_udp = nullptr;
 StatusInfo _status(&_blueLed);
 ModeSelector _modeSelector(4);
+FOTA _fota(&_inputSerial);
+BootModes _bootMode;
 
 void setup()
 {
-	// pinMode(4, INPUT);
-	// bool isDebugMode = digitalRead(4) == LOW ||
-	// 				   ESP.getResetInfoPtr()->reason == REASON_SOFT_RESTART;
+	NVRamData nvRam;
+	_bootMode = nvRam.BootMode;
+	if(_bootMode == BootModes::FOTA)
+	{
+		nvRam.Reset();
+		nvRam.Save();
+		
+		_fota.Setup();
+		return;
+	}
 
-	bool isDebugMode = _modeSelector.IsDebugMode();
+	bool isDebugMode = _bootMode == BootModes::DEBUG;
 	_outputSerial.begin(Constants::BaudRate);
 	_inputSerial.begin(Constants::BaudRate);
 	_redLed.Init();
@@ -52,11 +62,11 @@ void setup()
 	{
 		_greenLed.Pulse(1000);
 
-		Log::Init(&_localIp, &_inputSerial);
+		Log::Init(&Constants::LocalIp, &_inputSerial);
 
 		WiFi.mode(WIFI_AP);
-		WiFi.softAPConfig(_localIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
-		WiFi.softAP("TeyesCitroen", "TeyesCitroen");
+		WiFi.softAPConfig(Constants::LocalIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
+		WiFi.softAP(Constants::SSID, Constants::Password);
 		_inputSerial.println();
 		_inputSerial.println("--- DEBUG MODE ---");
 
@@ -76,6 +86,12 @@ void setup()
 
 void loop()
 {
+	if(_bootMode == BootModes::FOTA)
+	{
+		_fota.Loop();
+		return;
+	}
+
 	UpdatableCollection::UpdateAll();
 
 	int b = _inputSerial.read();
