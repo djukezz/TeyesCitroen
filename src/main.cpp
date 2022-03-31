@@ -11,6 +11,7 @@
 #include "Log.h"
 #include "Led.h"
 #include "StatusInfo.h"
+#include "UpdatableCollection.h"
 
 #define _inputSerial Serial	  // GPIO3 (RX)
 #define _outputSerial Serial1 // GPIO2 (TX)
@@ -29,7 +30,6 @@ Led _greenLed(12);
 IPAddress _localIp(192, 168, 43, 1);
 WiFiUDP *_udp = nullptr;
 StatusInfo _status(&_blueLed);
-std::vector<Updatable*> _updatables{&_redLed, &_blueLed, &_greenLed, &_status};
 
 void setup()
 {
@@ -64,18 +64,12 @@ void setup()
   		WiFi.forceSleepBegin(); delay(1);
 	}
 
-	for (const auto &updatable : _updatables)
-		if(updatable)
-			updatable->Init();
-
 	Log::GetInstance()->WriteDebug("Setup completed");
 }
 
 void loop()
 {
-	for (const auto &updatable : _updatables)
-		if(updatable)
-			updatable->Update();
+	UpdatableCollection::UpdateAll();
 
 	int b = _inputSerial.read();
 	if (b >= 0)
@@ -91,7 +85,7 @@ void loop()
 			buff[packetSize] = 0;
 			char *end;
 			Buttons b = static_cast<Buttons>(strtol(buff, &end, 16));
-			Log::GetInstance()->WriteDebug("REMOTE %s end", ButtonEx::ToString(b));
+			Log::GetInstance()->WriteDebug("REMOTE %s", ButtonEx::ToString(b));
 			ButtonCanMessage msg(b);
 			MessageCallback(&msg);
 		}

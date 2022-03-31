@@ -2,16 +2,28 @@
 
 #include "Arduino.h"
 
-class Updatable
+#include "IUpdatable.h"
+#include "UpdatableCollection.h"
+
+class Updatable : public IUpdatable
 {
 public:
-    Updatable() {}
-    virtual ~Updatable() {}
+    Updatable() : _collection(UpdatableCollection::GetInstance()) 
+    {
+        _collection->Add(this);
+    }
+    virtual ~Updatable()
+    {
+        _collection->Delete(this);
+    }
     virtual void Update() {}
-    virtual void Init() {}
+
 protected:
     size_t GetTime()
     {
         return static_cast<size_t>(millis());
     }
+
+private:
+    UpdatableCollection *const _collection;
 };
