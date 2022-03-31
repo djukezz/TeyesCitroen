@@ -12,6 +12,7 @@
 #include "Led.h"
 #include "StatusInfo.h"
 #include "UpdatableCollection.h"
+#include "ModeSelector.h"
 
 #define _inputSerial Serial	  // GPIO3 (RX)
 #define _outputSerial Serial1 // GPIO2 (TX)
@@ -30,11 +31,15 @@ Led _greenLed(12);
 IPAddress _localIp(192, 168, 43, 1);
 WiFiUDP *_udp = nullptr;
 StatusInfo _status(&_blueLed);
+ModeSelector _modeSelector(4);
 
 void setup()
 {
-	pinMode(4, INPUT);
-	bool isDebugMode = digitalRead(4) == LOW;
+	// pinMode(4, INPUT);
+	// bool isDebugMode = digitalRead(4) == LOW ||
+	// 				   ESP.getResetInfoPtr()->reason == REASON_SOFT_RESTART;
+
+	bool isDebugMode = _modeSelector.IsDebugMode();
 	_outputSerial.begin(Constants::BaudRate);
 	_inputSerial.begin(Constants::BaudRate);
 	_redLed.Init();
@@ -65,6 +70,8 @@ void setup()
 	}
 
 	Log::GetInstance()->WriteDebug("Setup completed");
+	Log::GetInstance()->WriteDebug("Flash size: %d", ESP.getFlashChipRealSize());
+	Log::GetInstance()->WriteDebug("Reset reason: %d", ESP.getResetInfoPtr()->reason);
 }
 
 void loop()
@@ -85,6 +92,7 @@ void loop()
 			buff[packetSize] = 0;
 			char *end;
 			Buttons b = static_cast<Buttons>(strtol(buff, &end, 16));
+
 			Log::GetInstance()->WriteDebug("REMOTE %s", ButtonEx::ToString(b));
 			ButtonCanMessage msg(b);
 			MessageCallback(&msg);
@@ -98,6 +106,8 @@ void MessageCallback(CanMessageBase *msg)
 	{
 		Buttons b1 = button->Button;
 		Buttons b2 = RemapButton(b1);
+
+		_modeSelector.ButtonPressed(b1);
 
 		if (b1 == b2)
 			Log::GetInstance()->WriteDebug("Button %s", ButtonEx::ToString(b1));
