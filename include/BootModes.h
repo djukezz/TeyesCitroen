@@ -4,7 +4,7 @@
 
 enum class BootModes : u32
 {
-    NORMAL,
+    NORMAL = 0,
     DEBUG,
     FOTA,
 };
@@ -24,6 +24,19 @@ public:
             return "OTA";
         default:
             return "[UNKNOWN]";
+        }
+    }
+
+    static bool IsValid(BootModes b)
+    {
+        switch (b)
+        {
+        case BootModes::NORMAL:
+        case BootModes::DEBUG:
+        case BootModes::FOTA:
+            return true;
+        default:
+            return false;
         }
     }
 };

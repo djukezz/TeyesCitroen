@@ -12,10 +12,11 @@
 class ModeSelector final : public Updatable
 {
 public:
-    ModeSelector(uint8_t pin)
+    ModeSelector(uint8_t pin = 0xFF)
         : _pin(pin)
     {
-        pinMode(_pin, INPUT);
+        if (_pin < 0xFF)
+            pinMode(_pin, INPUT);
     }
 
     void ButtonPressed(Buttons b)
@@ -42,7 +43,7 @@ public:
 
     void Update() override
     {
-        if(digitalRead(_pin) == LOW)
+        if (_pin < 0xFF && digitalRead(_pin) == LOW)
             Reset();
 
         if (_pressTime == 0)
@@ -77,8 +78,10 @@ private:
             return BootModes::DEBUG;
         case BootModes::DEBUG:
             return BootModes::FOTA;
-        default:
+        case BootModes::FOTA:
             return BootModes::NORMAL;
+        default:
+            return BootModes::DEBUG;
         }
     }
 

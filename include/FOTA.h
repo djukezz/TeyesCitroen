@@ -1,7 +1,5 @@
 #pragma once
 
-#pragma once
-
 #include "Constants.h"
 
 #include "Arduino.h"
@@ -35,7 +33,7 @@ public:
         if (_serial)
         {
             _serial->println("");
-            _serial->print("Connected to ");
+            _serial->print("AP SSID: ");
             _serial->println(Constants::SSID);
             _serial->print("IP address: ");
             _serial->println(Constants::LocalIp);

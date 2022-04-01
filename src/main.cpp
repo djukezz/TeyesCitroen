@@ -38,8 +38,16 @@ BootModes _bootMode;
 
 void setup()
 {
-	NVRamData nvRam;
+	_outputSerial.begin(Constants::BaudRate);
+	_inputSerial.begin(Constants::BaudRate);
+
+	NVRamData nvRam{};
 	_bootMode = nvRam.BootMode;
+
+	_inputSerial.println();
+	_inputSerial.print("Boot mode: ");
+	_inputSerial.println(BootModeEx::ToString(_bootMode));
+
 	if(_bootMode == BootModes::FOTA)
 	{
 		nvRam.Reset();
@@ -50,8 +58,6 @@ void setup()
 	}
 
 	bool isDebugMode = _bootMode == BootModes::DEBUG;
-	_outputSerial.begin(Constants::BaudRate);
-	_inputSerial.begin(Constants::BaudRate);
 	_redLed.Init();
 	_blueLed.Init();
 	_greenLed.Init();
@@ -67,8 +73,6 @@ void setup()
 		WiFi.mode(WIFI_AP);
 		WiFi.softAPConfig(Constants::LocalIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
 		WiFi.softAP(Constants::SSID, Constants::Password);
-		_inputSerial.println();
-		_inputSerial.println("--- DEBUG MODE ---");
 
 		_udp = new WiFiUDP();
 		_udp->begin(6666);
@@ -80,8 +84,6 @@ void setup()
 	}
 
 	Log::GetInstance()->WriteDebug("Setup completed");
-	Log::GetInstance()->WriteDebug("Flash size: %d", ESP.getFlashChipRealSize());
-	Log::GetInstance()->WriteDebug("Reset reason: %d", ESP.getResetInfoPtr()->reason);
 }
 
 void loop()
