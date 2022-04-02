@@ -82,6 +82,8 @@ void setup()
   		WiFi.forceSleepBegin(); delay(1);
 	}
 
+	_buttonsProcessing.Init();
+
 	Log::GetInstance()->WriteDebug("Setup completed");
 }
 

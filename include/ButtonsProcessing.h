@@ -42,6 +42,12 @@ public:
     {
         _callback = callback;
     }
+
+    void Init()
+    {        
+        LogButtonsInfo();
+    }
+
     void Process(ButtonCanMessage *const msg)
     {
         Buttons orig = msg->Button;
@@ -90,14 +96,14 @@ private:
         _time = GetTime();
 
         Log::GetInstance()->WriteDebug("Register button %s -> %s -----> %s",
-            ButtonEx::ToString(_pressed.Orig), ButtonEx::ToString(_pressed.Short), ButtonEx::ToString(_pressed.Long), _time);
+                                       ButtonEx::ToString(_pressed.Orig), ButtonEx::ToString(_pressed.Short), ButtonEx::ToString(_pressed.Long));
     }
 
     void TrySendPrevious(bool longPress)
     {
         if (!_pressed.IsEmpty())
         {
-            if(longPress)
+            if (longPress)
                 Log::GetInstance()->WriteDebug("Button %s -----> %s", ButtonEx::ToString(_pressed.Orig), ButtonEx::ToString(_pressed.Long));
             else
                 Log::GetInstance()->WriteDebug("Button %s -> %s", ButtonEx::ToString(_pressed.Orig), ButtonEx::ToString(_pressed.Short));
@@ -114,6 +120,21 @@ private:
         _callback(ptr);
     }
 
+    void LogButtonsInfo()
+    {
+        auto log = Log::GetInstance();
+        log->WriteDebug("Buttons settings:");
+        for (auto &item : _items)
+        {
+            if (item.IsLongPresent())
+                log->WriteDebug("%s -> %s -----> %s",
+                                ButtonEx::ToString(item.Orig), ButtonEx::ToString(item.Short), ButtonEx::ToString(item.Long));
+            else
+                log->WriteDebug("%s ---> %s",
+                                ButtonEx::ToString(item.Orig), ButtonEx::ToString(item.Short));
+        }
+    }
+
     std::function<void(CanMessageBase *)> _callback;
     ButtonItem _pressed;
     size_t _time = 0;
@@ -126,5 +147,3 @@ private:
         ButtonItem(Buttons::SWC_KEY_MENU_DOWN, Buttons::SWC_KEY_RADIO),
     };
 };
-
-
