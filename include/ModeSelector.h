@@ -19,7 +19,7 @@ public:
             pinMode(_pin, INPUT);
     }
 
-    void ButtonPressed(Buttons b)
+    void Process(Buttons b)
     {
         switch (b)
         {

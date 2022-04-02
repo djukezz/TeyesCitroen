@@ -15,17 +15,16 @@
 #include "ModeSelector.h"
 #include "FOTA.h"
 #include "NVRamData.h"
+#include "ButtonsProcessing.h"
 
 #define _inputSerial Serial	  // GPIO3 (RX)
 #define _outputSerial Serial1 // GPIO2 (TX)
 
-unsigned long _lastInfoTime = 0;
-const unsigned long _infoPeriod = 5000;
-
 void MessageCallback(CanMessageBase *);
-Buttons RemapButton(Buttons btn);
+void SendMessageImpl(CanMessageBase *);
 
 CitroenCanParser _parser(Constants::MaxMessageSize * 2, MessageCallback);
+ButtonsProcessing _buttonsProcessing(SendMessageImpl);
 u8 _sendBuffer[Constants::MaxMessageSize];
 Led _redLed(15);
 Led _blueLed(13);
@@ -66,7 +65,7 @@ void setup()
 
 	if(isDebugMode)
 	{
-		_greenLed.Pulse(1000);
+		_greenLed.Pulse(10000);
 
 		Log::Init(&Constants::LocalIp, &_inputSerial);
 
@@ -122,19 +121,9 @@ void MessageCallback(CanMessageBase *msg)
 {
 	if (ButtonCanMessage *button = dynamic_cast<ButtonCanMessage *>(msg))
 	{
-		Buttons b1 = button->Button;
-		Buttons b2 = RemapButton(b1);
-
-		_modeSelector.ButtonPressed(b1);
-
-		if (b1 == b2)
-			Log::GetInstance()->WriteDebug("Button %s", ButtonEx::ToString(b1));
-		else
-		{
-			auto remapped = ButtonCanMessage(b2);
-			msg = &remapped;
-			Log::GetInstance()->WriteDebug("Button %s -> %s", ButtonEx::ToString(b1), ButtonEx::ToString(b2));
-		}
+		_modeSelector.Process(button->Button);
+		_buttonsProcessing.Process(button);
+		return; // buttons have their own special behavior 
 	}
 	else if (auto tiny = dynamic_cast<TinyCanMessage *>(msg))
 	{
@@ -159,23 +148,13 @@ void MessageCallback(CanMessageBase *msg)
 		Log::GetInstance()->FlushDebug();
 	}
 
+	SendMessageImpl(msg);
+}
+
+void SendMessageImpl(CanMessageBase *msg)
+{
 	size_t size = msg->CopyTo(_sendBuffer);
 	_outputSerial.write(_sendBuffer, size);
 
 	_redLed.Pulse(100);
-}
-
-Buttons RemapButton(Buttons btn)
-{
-	switch (btn)
-	{
-	case Buttons::SWC_KEY_LIST:
-		return Buttons::SWC_KEY_MENU;
-	case Buttons::SWC_KEY_MENU_DOWN:
-		return Buttons::SWC_KEY_MEDIA;
-	case Buttons::SWC_KEY_MENU_UP:
-		return Buttons::SWC_KEY_NAVI;
-	default:
-		return btn;
-	}
 }
