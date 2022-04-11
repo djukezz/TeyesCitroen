@@ -138,7 +138,7 @@ private:
     std::function<void(CanMessageBase *)> _callback;
     ButtonItem _pressed;
     size_t _time = 0;
-    static const size_t _longPressTime = 1500;
+    static const size_t _longPressTime = 1000;
     std::vector<ButtonItem> _items{
         ButtonItem(Buttons::SWC_KEY_ESC, Buttons::SWC_KEY_ESC, Buttons::SWC_KEY_MENU),
         ButtonItem(Buttons::SWC_KEY_PHONE_ACCEPT, Buttons::SWC_KEY_PHONE_ACCEPT, Buttons::SWC_KEY_BT),

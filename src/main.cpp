@@ -16,6 +16,7 @@
 #include "FOTA.h"
 #include "NVRamData.h"
 #include "ButtonsProcessing.h"
+#include "UdpCommandReceiver.h"
 
 #define _inputSerial Serial	  // GPIO3 (RX)
 #define _outputSerial Serial1 // GPIO2 (TX)
@@ -29,11 +30,11 @@ u8 _sendBuffer[Constants::MaxMessageSize];
 Led _redLed(15);
 Led _blueLed(13);
 Led _greenLed(12);
-WiFiUDP *_udp = nullptr;
 StatusInfo _status(&_blueLed);
 ModeSelector _modeSelector(4);
 FOTA _fota(&_inputSerial);
 BootModes _bootMode;
+UdpCommandReceiver* _commandReceiver;
 
 void setup()
 {
@@ -71,10 +72,9 @@ void setup()
 
 		WiFi.mode(WIFI_AP);
 		WiFi.softAPConfig(Constants::LocalIp, IPAddress(127, 0, 0, 1), IPAddress(255, 255, 255, 0));
-		WiFi.softAP(Constants::SSID, Constants::Password);
+		WiFi.softAP(Constants::SSID, Constants::Password);	
 
-		_udp = new WiFiUDP();
-		_udp->begin(6666);
+		_commandReceiver = new UdpCommandReceiver(MessageCallback);	
 	}
 	else
 	{
@@ -100,23 +100,6 @@ void loop()
 	int b = _inputSerial.read();
 	if (b >= 0)
 		_parser.Add(static_cast<u8>(b));
-
-	if (_udp)
-	{
-		int packetSize = _udp->parsePacket();
-		if (packetSize == 2)
-		{
-			char buff[packetSize + 1];
-			_udp->read(buff, packetSize);
-			buff[packetSize] = 0;
-			char *end;
-			Buttons b = static_cast<Buttons>(strtol(buff, &end, 16));
-
-			Log::GetInstance()->WriteDebug("REMOTE %s", ButtonEx::ToString(b));
-			ButtonCanMessage msg(b);
-			MessageCallback(&msg);
-		}
-	}
 }
 
 void MessageCallback(CanMessageBase *msg)

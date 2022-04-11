@@ -77,7 +77,8 @@ private:
         case BootModes::NORMAL:
             return BootModes::DEBUG;
         case BootModes::DEBUG:
-            return BootModes::FOTA;
+            //return BootModes::FOTA;
+            return BootModes::NORMAL;
         case BootModes::FOTA:
             return BootModes::NORMAL;
         default:
